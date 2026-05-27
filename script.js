@@ -60,9 +60,24 @@ const specialFacts = new Map([
   ["United States", "The contiguous United States borders Canada to the north and Mexico to the south."]
 ]);
 
+const largeIslandCountries = new Set([
+  "Australia",
+  "Cuba",
+  "Iceland",
+  "Ireland",
+  "Japan",
+  "Madagascar",
+  "New Zealand",
+  "Philippines",
+  "Sri Lanka",
+  "Taiwan",
+  "United Kingdom"
+]);
+
 let topology;
 let geometries = [];
 let countries = [];
+let quizCountries = [];
 let adjacency = [];
 let quiz = [];
 let currentIndex = 0;
@@ -74,11 +89,12 @@ init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-50m.json?v=2");
+    const response = await fetch("assets/maps/countries-50m.json?v=3");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
     countries = buildCountryDataset();
+    quizCountries = countries.filter(isQuizEligibleCountry);
     startQuiz();
   } catch (error) {
     const message = document.createElement("p");
@@ -125,8 +141,12 @@ function getCountryFact(name, borderCount) {
   return `${name} has ${borderCount} land neighbors in this map dataset.`;
 }
 
+function isQuizEligibleCountry(country) {
+  return country.neighbors.length > 0 || largeIslandCountries.has(country.name);
+}
+
 function startQuiz() {
-  quiz = shuffle([...countries]).slice(0, QUESTION_COUNT).map(country => ({
+  quiz = shuffle([...quizCountries]).slice(0, QUESTION_COUNT).map(country => ({
     country,
     options: buildOptions(country)
   }));
@@ -141,7 +161,7 @@ function startQuiz() {
 
 function buildOptions(correct) {
   const selected = new Map([[correct.id, correct]]);
-  const ranked = countries
+  const ranked = quizCountries
     .filter(country => country.id !== correct.id)
     .map(country => ({
       country,
@@ -336,7 +356,6 @@ function chooseAnswer(selectedId) {
   elements.nextButton.disabled = false;
   elements.nextButton.textContent = currentIndex === QUESTION_COUNT - 1 ? "Show Results" : "Next Question";
   elements.progressBar.style.width = `${((currentIndex + 1) / QUESTION_COUNT) * 100}%`;
-  elements.nextButton.focus();
 }
 
 function nextQuestion() {

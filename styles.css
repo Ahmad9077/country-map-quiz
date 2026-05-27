@@ -87,6 +87,16 @@ p {
   gap: 16px;
 }
 
+.actions-row {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  align-items: center;
+  border-top: 1px solid rgba(31, 37, 35, 0.08);
+  background: rgba(255, 253, 248, 0.94);
+  padding-top: 10px;
+}
+
 .label {
   margin-bottom: 6px;
   color: var(--teal-dark);
@@ -317,6 +327,11 @@ h1,
   color: var(--muted);
   line-height: 1.45;
   animation: fadeUp 180ms ease both;
+}
+
+.feedback[hidden] {
+  display: block !important;
+  visibility: hidden;
 }
 
 .feedback strong {

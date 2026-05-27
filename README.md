@@ -20,5 +20,7 @@ http://localhost:4173
 
 - Map data is vendored from `world-atlas` in `assets/maps/countries-50m.json`.
 - Rendering uses local copies of D3 and `topojson-client` in `assets/vendor/`.
+- Small island countries are kept out of the quiz pool; larger island countries
+  such as Sri Lanka, Taiwan, and Madagascar are allowed.
 - The design direction comes from the new Google Stitch project `Country Map Quiz`
   with the generated `Modern Atlas` visual system.
