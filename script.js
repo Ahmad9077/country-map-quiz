@@ -74,7 +74,7 @@ init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-110m.json");
+    const response = await fetch("assets/maps/countries-50m.json");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
@@ -110,15 +110,17 @@ function buildCountryDataset() {
         feature,
         neighbors,
         centroid,
+        bounds: d3.geoBounds(feature),
         fact: getCountryFact(name, neighbors.length)
       };
     })
-    .filter(country => !excludedNames.has(country.rawName) && country.neighbors.length > 0)
+    .filter(country => !excludedNames.has(country.rawName))
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
 function getCountryFact(name, borderCount) {
   if (specialFacts.has(name)) return specialFacts.get(name);
+  if (borderCount === 0) return `${name} has no land neighbors in this map dataset.`;
   if (borderCount === 1) return `${name} has 1 land neighbor in this map dataset.`;
   return `${name} has ${borderCount} land neighbors in this map dataset.`;
 }
@@ -171,9 +173,7 @@ function renderQuestion() {
   elements.questionLabel.textContent = `Question ${currentIndex + 1} of ${QUESTION_COUNT}`;
   elements.scoreValue.textContent = score;
   elements.progressBar.style.width = `${((currentIndex + 1) / QUESTION_COUNT) * 100}%`;
-  elements.neighborCount.textContent = item.country.neighbors.length === 1
-    ? "1 land border"
-    : `${item.country.neighbors.length} land borders`;
+  elements.neighborCount.textContent = getBorderLabel(item.country.neighbors.length);
   elements.feedback.hidden = true;
   elements.feedback.replaceChildren();
   elements.nextButton.disabled = true;
@@ -201,13 +201,11 @@ function renderQuestion() {
 function renderMap(country) {
   elements.mapStage.replaceChildren();
 
-  const neighborCountries = country.neighbors
-    .map(index => countries.find(item => item.index === index))
-    .filter(Boolean);
-  const projection = d3.geoMercator().fitExtent(
-    [[82, 64], [MAP_WIDTH - 82, MAP_HEIGHT - 64]],
-    country.feature
-  );
+  const viewBounds = getExpandedBounds(country);
+  const contextCountries = countries.filter(item => (
+    item.id !== country.id && boundsIntersect(item.bounds, viewBounds)
+  ));
+  const projection = createProjection(viewBounds);
   const path = d3.geoPath(projection);
 
   const svg = d3.select(elements.mapStage)
@@ -220,11 +218,13 @@ function renderMap(country) {
     .attr("class", "map-graticule")
     .attr("d", path);
 
-  svg.selectAll(".map-neighbor")
-    .data(neighborCountries.map(item => item.feature))
+  svg.selectAll(".map-context")
+    .data(contextCountries)
     .join("path")
-    .attr("class", "map-neighbor")
-    .attr("d", path);
+    .attr("class", item => (
+      country.neighbors.includes(item.index) ? "map-context map-neighbor" : "map-context"
+    ))
+    .attr("d", item => path(item.feature));
 
   svg.append("path")
     .datum(country.feature)
@@ -235,6 +235,74 @@ function renderMap(country) {
     .datum(topojson.mesh(topology, topology.objects.countries, (a, b) => a !== b))
     .attr("class", "map-boundary")
     .attr("d", path);
+}
+
+function getBorderLabel(count) {
+  if (count === 0) return "No land borders";
+  if (count === 1) return "1 land border";
+  return `${count} land borders`;
+}
+
+function getExpandedBounds(country) {
+  const [[west, south], [east, north]] = country.bounds;
+  const centerLon = (west + east) / 2;
+  const centerLat = (south + north) / 2;
+  const lonSpan = Math.max(0.7, east - west);
+  const latSpan = Math.max(0.7, north - south);
+  const largestSpan = Math.max(lonSpan, latSpan);
+  const zoomOut = getZoomOutFactor(largestSpan);
+  const minHalfSpan = largestSpan < 4 ? 3.2 : 1.8;
+  const lonHalf = Math.max((lonSpan * zoomOut) / 2, minHalfSpan);
+  const latHalf = Math.max((latSpan * zoomOut) / 2, minHalfSpan);
+
+  return [
+    [clamp(centerLon - lonHalf, -179.8, 179.8), clamp(centerLat - latHalf, -84, 84)],
+    [clamp(centerLon + lonHalf, -179.8, 179.8), clamp(centerLat + latHalf, -84, 84)]
+  ];
+}
+
+function getZoomOutFactor(span) {
+  if (span < 1.5) return 5;
+  if (span < 4) return 3.2;
+  if (span < 10) return 2.3;
+  if (span < 22) return 1.8;
+  if (span < 48) return 1.45;
+  return 1.25;
+}
+
+function createProjection([[west, south], [east, north]]) {
+  const paddingX = 58;
+  const paddingY = 46;
+  const center = [(west + east) / 2, (south + north) / 2];
+  const projection = d3.geoMercator()
+    .center(center)
+    .translate([MAP_WIDTH / 2, MAP_HEIGHT / 2])
+    .scale(1);
+
+  const corners = [
+    projection([west, south]),
+    projection([east, south]),
+    projection([east, north]),
+    projection([west, north])
+  ];
+  const xValues = corners.map(point => point[0]);
+  const yValues = corners.map(point => point[1]);
+  const projectedWidth = Math.max(...xValues) - Math.min(...xValues);
+  const projectedHeight = Math.max(...yValues) - Math.min(...yValues);
+  const scale = Math.min(
+    (MAP_WIDTH - paddingX * 2) / projectedWidth,
+    (MAP_HEIGHT - paddingY * 2) / projectedHeight
+  );
+
+  return projection.scale(scale);
+}
+
+function boundsIntersect([[westA, southA], [eastA, northA]], [[westB, southB], [eastB, northB]]) {
+  return eastA >= westB && eastB >= westA && northA >= southB && northB >= southA;
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
 }
 
 function chooseAnswer(selectedId) {

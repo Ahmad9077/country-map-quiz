@@ -18,7 +18,7 @@ http://localhost:4173
 
 ## Notes
 
-- Map data is vendored from `world-atlas` in `assets/maps/countries-110m.json`.
+- Map data is vendored from `world-atlas` in `assets/maps/countries-50m.json`.
 - Rendering uses local copies of D3 and `topojson-client` in `assets/vendor/`.
 - The design direction comes from the new Google Stitch project `Country Map Quiz`
   with the generated `Modern Atlas` visual system.

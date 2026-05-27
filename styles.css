@@ -201,10 +201,15 @@ h1,
   min-height: inherit;
 }
 
-.map-neighbor {
+.map-context {
   fill: rgba(255, 253, 248, 0.78);
   stroke: rgba(31, 37, 35, 0.34);
   stroke-width: 1.1;
+}
+
+.map-neighbor {
+  fill: rgba(255, 253, 248, 0.9);
+  stroke: rgba(31, 37, 35, 0.42);
 }
 
 .map-target {
