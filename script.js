@@ -1,0 +1,380 @@
+const QUESTION_COUNT = 15;
+const MAP_WIDTH = 960;
+const MAP_HEIGHT = 610;
+
+const elements = {
+  quizPanel: document.querySelector("#quiz-panel"),
+  resultsPanel: document.querySelector("#results-panel"),
+  questionLabel: document.querySelector("#question-label"),
+  scoreValue: document.querySelector("#score-value"),
+  progressBar: document.querySelector("#progress-bar"),
+  mapStage: document.querySelector("#map-stage"),
+  neighborCount: document.querySelector("#neighbor-count"),
+  options: document.querySelector("#options"),
+  feedback: document.querySelector("#feedback"),
+  nextButton: document.querySelector("#next-button"),
+  restartButton: document.querySelector("#restart-button"),
+  playAgainButton: document.querySelector("#play-again-button"),
+  resultTitle: document.querySelector("#result-title"),
+  resultMessage: document.querySelector("#result-message"),
+  finalScore: document.querySelector("#final-score"),
+  finalPercent: document.querySelector("#final-percent"),
+  resultGauge: document.querySelector("#result-gauge"),
+  scoreGrade: document.querySelector("#score-grade"),
+  reviewList: document.querySelector("#review-list")
+};
+
+const excludedNames = new Set([
+  "Antarctica",
+  "Fr. S. Antarctic Lands",
+  "N. Cyprus",
+  "Somaliland",
+  "W. Sahara"
+]);
+
+const normalizedNames = new Map([
+  ["Bosnia and Herz.", "Bosnia and Herzegovina"],
+  ["Central African Rep.", "Central African Republic"],
+  ["Congo", "Republic of the Congo"],
+  ["Czechia", "Czech Republic"],
+  ["Dem. Rep. Congo", "Democratic Republic of the Congo"],
+  ["Dominican Rep.", "Dominican Republic"],
+  ["Eq. Guinea", "Equatorial Guinea"],
+  ["eSwatini", "Eswatini"],
+  ["Lao PDR", "Laos"],
+  ["North Macedonia", "North Macedonia"],
+  ["Palestine", "Palestine"],
+  ["S. Sudan", "South Sudan"],
+  ["Solomon Is.", "Solomon Islands"],
+  ["Timor-Leste", "East Timor"],
+  ["United States of America", "United States"]
+]);
+
+const specialFacts = new Map([
+  ["Russia", "Russia shares land borders with more countries than any other country in the quiz."],
+  ["China", "China has one of the world's longest land borders and many neighboring countries."],
+  ["Brazil", "Brazil touches nearly every country in mainland South America."],
+  ["France", "Mainland France borders countries from the North Sea region to the Mediterranean."],
+  ["India", "India's outline is framed by the Himalayas, deserts, plains, and long coastlines."],
+  ["Kuwait", "Kuwait sits at the northwestern edge of the Persian Gulf."],
+  ["United States", "The contiguous United States borders Canada to the north and Mexico to the south."]
+]);
+
+let topology;
+let geometries = [];
+let countries = [];
+let adjacency = [];
+let quiz = [];
+let currentIndex = 0;
+let score = 0;
+let locked = false;
+let answers = [];
+
+init();
+
+async function init() {
+  try {
+    const response = await fetch("assets/maps/countries-110m.json");
+    topology = await response.json();
+    geometries = topology.objects.countries.geometries;
+    adjacency = topojson.neighbors(geometries);
+    countries = buildCountryDataset();
+    startQuiz();
+  } catch (error) {
+    const message = document.createElement("p");
+    message.textContent = "Could not load the local map dataset. Please refresh the page.";
+    elements.quizPanel.replaceChildren(message);
+    console.error(error);
+  }
+}
+
+function buildCountryDataset() {
+  const featureCollection = topojson.feature(topology, topology.objects.countries);
+
+  return geometries
+    .map((geometry, index) => {
+      const feature = featureCollection.features[index];
+      const rawName = geometry.properties.name;
+      const name = normalizedNames.get(rawName) || rawName;
+      const neighbors = adjacency[index].filter(neighborIndex => {
+        const neighborName = geometries[neighborIndex].properties.name;
+        return !excludedNames.has(neighborName);
+      });
+      const centroid = d3.geoCentroid(feature);
+
+      return {
+        id: geometry.id,
+        index,
+        rawName,
+        name,
+        feature,
+        neighbors,
+        centroid,
+        fact: getCountryFact(name, neighbors.length)
+      };
+    })
+    .filter(country => !excludedNames.has(country.rawName) && country.neighbors.length > 0)
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function getCountryFact(name, borderCount) {
+  if (specialFacts.has(name)) return specialFacts.get(name);
+  if (borderCount === 1) return `${name} has 1 land neighbor in this map dataset.`;
+  return `${name} has ${borderCount} land neighbors in this map dataset.`;
+}
+
+function startQuiz() {
+  quiz = shuffle([...countries]).slice(0, QUESTION_COUNT).map(country => ({
+    country,
+    options: buildOptions(country)
+  }));
+  currentIndex = 0;
+  score = 0;
+  locked = false;
+  answers = [];
+  elements.resultsPanel.hidden = true;
+  elements.quizPanel.hidden = false;
+  renderQuestion();
+}
+
+function buildOptions(correct) {
+  const selected = new Map([[correct.id, correct]]);
+  const ranked = countries
+    .filter(country => country.id !== correct.id)
+    .map(country => ({
+      country,
+      score: distractorScore(correct, country) + Math.random() * 0.25
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  for (const item of ranked) {
+    if (selected.size >= 4) break;
+    selected.set(item.country.id, item.country);
+  }
+
+  return shuffle([...selected.values()]);
+}
+
+function distractorScore(correct, candidate) {
+  const isNeighbor = correct.neighbors.includes(candidate.index);
+  const distance = d3.geoDistance(correct.centroid, candidate.centroid);
+  const proximityScore = Math.max(0, 14 - distance * 8);
+  const nameScore = sharedWords(correct.name, candidate.name) * 1.5;
+  const borderScore = Math.max(0, 3 - Math.abs(correct.neighbors.length - candidate.neighbors.length) * 0.35);
+  return proximityScore + nameScore + borderScore + (isNeighbor ? 9 : 0);
+}
+
+function renderQuestion() {
+  const item = quiz[currentIndex];
+  locked = false;
+
+  elements.questionLabel.textContent = `Question ${currentIndex + 1} of ${QUESTION_COUNT}`;
+  elements.scoreValue.textContent = score;
+  elements.progressBar.style.width = `${((currentIndex + 1) / QUESTION_COUNT) * 100}%`;
+  elements.neighborCount.textContent = item.country.neighbors.length === 1
+    ? "1 land border"
+    : `${item.country.neighbors.length} land borders`;
+  elements.feedback.hidden = true;
+  elements.feedback.replaceChildren();
+  elements.nextButton.disabled = true;
+  elements.nextButton.textContent = "Choose an answer";
+  elements.options.replaceChildren();
+
+  renderMap(item.country);
+
+  item.options.forEach((option, index) => {
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "option-button";
+    button.dataset.id = option.id;
+    button.dataset.key = String(index + 1);
+    const label = document.createElement("span");
+    label.className = "option-text";
+    label.textContent = option.name;
+    button.append(label);
+    button.setAttribute("aria-label", `Option ${index + 1}: ${option.name}`);
+    button.addEventListener("click", () => chooseAnswer(option.id));
+    elements.options.append(button);
+  });
+}
+
+function renderMap(country) {
+  elements.mapStage.replaceChildren();
+
+  const neighborCountries = country.neighbors
+    .map(index => countries.find(item => item.index === index))
+    .filter(Boolean);
+  const projection = d3.geoMercator().fitExtent(
+    [[82, 64], [MAP_WIDTH - 82, MAP_HEIGHT - 64]],
+    country.feature
+  );
+  const path = d3.geoPath(projection);
+
+  const svg = d3.select(elements.mapStage)
+    .append("svg")
+    .attr("viewBox", `0 0 ${MAP_WIDTH} ${MAP_HEIGHT}`)
+    .attr("aria-hidden", "true");
+
+  svg.append("path")
+    .datum(d3.geoGraticule10())
+    .attr("class", "map-graticule")
+    .attr("d", path);
+
+  svg.selectAll(".map-neighbor")
+    .data(neighborCountries.map(item => item.feature))
+    .join("path")
+    .attr("class", "map-neighbor")
+    .attr("d", path);
+
+  svg.append("path")
+    .datum(country.feature)
+    .attr("class", "map-target")
+    .attr("d", path);
+
+  svg.append("path")
+    .datum(topojson.mesh(topology, topology.objects.countries, (a, b) => a !== b))
+    .attr("class", "map-boundary")
+    .attr("d", path);
+}
+
+function chooseAnswer(selectedId) {
+  if (locked) return;
+  locked = true;
+
+  const item = quiz[currentIndex];
+  const selectedCountry = countries.find(country => country.id === selectedId);
+  const isCorrect = selectedId === item.country.id;
+  if (isCorrect) score += 1;
+
+  answers.push({
+    country: item.country,
+    selected: selectedCountry,
+    correct: isCorrect
+  });
+
+  [...elements.options.children].forEach(button => {
+    const buttonId = String(button.dataset.id);
+    const isCorrectButton = buttonId === String(item.country.id);
+    const isChosenWrong = buttonId === String(selectedId) && !isCorrect;
+    button.disabled = true;
+    if (isCorrectButton) button.classList.add("correct");
+    if (isChosenWrong) button.classList.add("wrong");
+    if (buttonId === String(selectedId)) button.setAttribute("aria-pressed", "true");
+  });
+
+  elements.scoreValue.textContent = score;
+  elements.feedback.hidden = false;
+  renderFeedback(isCorrect, item.country);
+  elements.nextButton.disabled = false;
+  elements.nextButton.textContent = currentIndex === QUESTION_COUNT - 1 ? "Show Results" : "Next Question";
+  elements.progressBar.style.width = `${((currentIndex + 1) / QUESTION_COUNT) * 100}%`;
+  elements.nextButton.focus();
+}
+
+function nextQuestion() {
+  if (!locked) return;
+  if (currentIndex === QUESTION_COUNT - 1) {
+    showResults();
+    return;
+  }
+  currentIndex += 1;
+  renderQuestion();
+}
+
+function showResults() {
+  const percent = Math.round((score / QUESTION_COUNT) * 100);
+  locked = false;
+  elements.quizPanel.hidden = true;
+  elements.resultsPanel.hidden = false;
+  elements.resultTitle.textContent = `${score} out of ${QUESTION_COUNT}`;
+  elements.finalScore.textContent = score;
+  elements.finalPercent.textContent = `${percent}%`;
+  elements.resultGauge.style.setProperty("--score-angle", `${percent * 3.6}deg`);
+  elements.scoreGrade.textContent = getScoreGrade(percent);
+  elements.resultMessage.textContent = getPerformanceMessage(percent);
+  elements.reviewList.replaceChildren();
+
+  answers.forEach((answer, index) => {
+    elements.reviewList.append(createReviewItem(answer, index));
+  });
+}
+
+function renderFeedback(isCorrect, country) {
+  elements.feedback.replaceChildren();
+
+  const status = document.createElement("strong");
+  status.textContent = isCorrect ? "Correct." : "Wrong.";
+  elements.feedback.append(status, " ");
+
+  if (!isCorrect) {
+    const countryName = document.createElement("strong");
+    countryName.textContent = country.name;
+    elements.feedback.append("The correct answer is ", countryName, ". ");
+  }
+
+  elements.feedback.append(country.fact);
+}
+
+function createReviewItem(answer, index) {
+  const row = document.createElement("article");
+  row.className = "review-item";
+
+  const mark = document.createElement("div");
+  mark.className = `review-mark ${answer.correct ? "good" : "bad"}`;
+  mark.textContent = answer.correct ? "Correct" : "Wrong";
+
+  const country = document.createElement("strong");
+  country.textContent = `${index + 1}. ${answer.country.name}`;
+
+  const selected = document.createElement("span");
+  selected.textContent = `Your answer: ${answer.selected.name}`;
+
+  row.append(mark, country, selected);
+  return row;
+}
+
+function getScoreGrade(percent) {
+  if (percent === 100) return "A+";
+  if (percent >= 80) return "A";
+  if (percent >= 60) return "B";
+  if (percent >= 40) return "C";
+  return "Practice";
+}
+
+function getPerformanceMessage(percent) {
+  if (percent === 100) return "Perfect round. You read every outline and border cue.";
+  if (percent >= 80) return "Excellent score. Only a few regional shapes slowed you down.";
+  if (percent >= 60) return "Solid result. Replaying will make the neighboring borders easier to recognize.";
+  if (percent >= 40) return "Good start. Use the review list to compare the countries you mixed up.";
+  return "Tough round. Focus on coastline shape, border count, and nearby-country outlines.";
+}
+
+function shuffle(items) {
+  const copy = [...items];
+  for (let i = copy.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [copy[i], copy[j]] = [copy[j], copy[i]];
+  }
+  return copy;
+}
+
+function sharedWords(a, b) {
+  const wordsA = new Set(a.toLowerCase().split(/[^a-z]+/).filter(word => word.length > 3));
+  return b.toLowerCase().split(/[^a-z]+/).filter(word => wordsA.has(word)).length;
+}
+
+elements.nextButton.addEventListener("click", nextQuestion);
+elements.restartButton.addEventListener("click", startQuiz);
+elements.playAgainButton.addEventListener("click", startQuiz);
+
+document.addEventListener("keydown", event => {
+  if (!elements.resultsPanel.hidden) return;
+
+  if (event.key >= "1" && event.key <= "4" && !locked) {
+    const button = elements.options.children[Number(event.key) - 1];
+    if (button) button.click();
+  }
+  if ((event.key === "Enter" || event.key === " ") && locked && !elements.nextButton.disabled) {
+    elements.nextButton.click();
+  }
+});

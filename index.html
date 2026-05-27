@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="description" content="A multiple-choice country map quiz using border outlines and neighboring countries.">
+    <title>Country Map Quiz</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="app-shell">
+      <section id="quiz-panel" class="quiz-panel" aria-live="polite">
+        <header class="quiz-header">
+          <div>
+            <p id="question-label" class="label">Question 1 of 15</p>
+            <h1>Country Map Quiz</h1>
+          </div>
+          <div class="score-box" aria-label="Current score">
+            <span id="score-value">0</span>
+            <small>/ 15</small>
+          </div>
+        </header>
+
+        <div class="progress-shell" aria-label="Quiz progress">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+
+        <div class="quiz-grid">
+          <section class="map-panel" aria-labelledby="map-heading">
+            <div class="map-topline">
+              <div>
+                <p class="label">Border outline</p>
+                <h2 id="map-heading">Which country is this?</h2>
+              </div>
+              <span id="neighbor-count" class="map-chip">Borders loading</span>
+            </div>
+            <div id="map-stage" class="map-stage" role="img" aria-label="Country border map"></div>
+          </section>
+
+          <section class="answer-panel" aria-label="Answer choices">
+            <div id="options" class="options-grid" role="group" aria-label="Multiple choice answers"></div>
+            <div id="feedback" class="feedback" hidden></div>
+          </section>
+        </div>
+
+        <footer class="actions-row">
+          <button id="restart-button" class="secondary-button" type="button">Restart</button>
+          <button id="next-button" class="primary-button" type="button" disabled>Choose an answer</button>
+        </footer>
+      </section>
+
+      <section id="results-panel" class="results-panel" hidden>
+        <header class="results-header">
+          <div>
+            <p class="label">Final result</p>
+            <h2 id="result-title">Round complete</h2>
+            <p id="result-message" class="result-message"></p>
+          </div>
+          <div id="result-gauge" class="result-gauge" aria-label="Final accuracy">
+            <span id="final-percent">0%</span>
+            <small>accuracy</small>
+          </div>
+        </header>
+
+        <div class="score-board" aria-label="Score summary">
+          <div class="score-metric">
+            <span id="final-score">0</span>
+            <small>Total correct</small>
+          </div>
+          <div class="score-metric">
+            <span>15</span>
+            <small>Questions</small>
+          </div>
+          <div class="score-metric">
+            <span id="score-grade">--</span>
+            <small>Performance</small>
+          </div>
+        </div>
+
+        <div class="result-actions">
+          <button id="play-again-button" class="primary-button" type="button">Play Again</button>
+        </div>
+
+        <section class="review-wrap" aria-labelledby="review-heading">
+          <h3 id="review-heading">Review Answers</h3>
+          <div id="review-list" class="review-list"></div>
+        </section>
+      </section>
+    </main>
+
+    <script src="assets/vendor/d3.min.js"></script>
+    <script src="assets/vendor/topojson-client.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
