@@ -74,7 +74,7 @@ init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-50m.json");
+    const response = await fetch("assets/maps/countries-50m.json?v=2");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
