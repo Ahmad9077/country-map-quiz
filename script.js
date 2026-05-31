@@ -74,6 +74,10 @@ const largeIslandCountries = new Set([
   "United Kingdom"
 ]);
 
+const blockedQuizCountryNames = new Set([
+  "Israel"
+]);
+
 let topology;
 let geometries = [];
 let countries = [];
@@ -89,7 +93,7 @@ init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-50m.json?v=3");
+    const response = await fetch("assets/maps/countries-50m.json?v=4");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
@@ -142,6 +146,7 @@ function getCountryFact(name, borderCount) {
 }
 
 function isQuizEligibleCountry(country) {
+  if (blockedQuizCountryNames.has(country.name)) return false;
   return country.neighbors.length > 0 || largeIslandCountries.has(country.name);
 }
 
