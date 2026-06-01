@@ -313,6 +313,15 @@ h1,
   background: var(--moss-soft);
 }
 
+.option-button img,
+.option-button picture,
+.option-button video,
+.feedback img,
+.feedback picture,
+.feedback video {
+  display: none !important;
+}
+
 .option-button.wrong {
   border-color: rgba(168, 77, 75, 0.64);
   background: var(--red-soft);

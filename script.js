@@ -93,7 +93,7 @@ init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-50m.json?v=4");
+    const response = await fetch("assets/maps/countries-50m.json?v=5");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
@@ -358,6 +358,7 @@ function chooseAnswer(selectedId) {
   elements.scoreValue.textContent = score;
   elements.feedback.hidden = false;
   renderFeedback(isCorrect, item.country);
+  removeAnswerMedia();
   elements.nextButton.disabled = false;
   elements.nextButton.textContent = currentIndex === QUESTION_COUNT - 1 ? "Show Results" : "Next Question";
   elements.progressBar.style.width = `${((currentIndex + 1) / QUESTION_COUNT) * 100}%`;
@@ -405,6 +406,11 @@ function renderFeedback(isCorrect, country) {
   }
 
   elements.feedback.append(country.fact);
+}
+
+function removeAnswerMedia() {
+  elements.options.querySelectorAll("img, picture, video").forEach(element => element.remove());
+  elements.feedback.querySelectorAll("img, picture, video").forEach(element => element.remove());
 }
 
 function createReviewItem(answer, index) {
