@@ -95,7 +95,7 @@ init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-50m.json?v=6");
+    const response = await fetch("assets/maps/countries-50m.json?v=7");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
@@ -230,7 +230,7 @@ function renderQuestion() {
 function renderMap(country) {
   elements.mapStage.replaceChildren();
 
-  const viewBounds = getExpandedBounds(country, zoomedOut ? 1.9 : 1);
+  const viewBounds = getExpandedBounds(country, zoomedOut ? getManualZoomMultiplier(country) : 1);
   const contextCountries = countries.filter(item => (
     item.id !== country.id && boundsIntersect(item.bounds, viewBounds)
   ));
@@ -295,6 +295,16 @@ function toggleMapZoom() {
   zoomedOut = !zoomedOut;
   updateZoomToggle();
   renderMap(quiz[currentIndex].country);
+}
+
+function getManualZoomMultiplier(country) {
+  const [[west, south], [east, north]] = country.bounds;
+  const largestSpan = Math.max(east - west, north - south);
+  if (largestSpan < 1.5) return 6.5;
+  if (largestSpan < 4) return 4.8;
+  if (largestSpan < 10) return 3.4;
+  if (largestSpan < 22) return 2.5;
+  return 1.9;
 }
 
 function updateZoomToggle() {
