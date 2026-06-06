@@ -416,6 +416,14 @@ function showResults() {
   answers.forEach((answer, index) => {
     elements.reviewList.append(createReviewItem(answer, index));
   });
+
+  window.QuizzesHubProgress?.record({
+    quizId: "country-map",
+    score,
+    total: QUESTION_COUNT,
+    level: getScoreGrade(percent),
+    details: { percent, answers: answers.map(answer => ({ correct: answer.correct, country: answer.country.name })) }
+  });
 }
 
 function renderFeedback(isCorrect, country) {
