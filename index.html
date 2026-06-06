@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="description" content="A multiple-choice country map quiz using border outlines and neighboring countries.">
     <title>Country Map Quiz</title>
+    <script>document.documentElement.dataset.quizAccess = "checking";</script>
+    <style>html[data-quiz-access="checking"] body { visibility: hidden; }</style>
+    <noscript><meta http-equiv="refresh" content="0;url=https://ahmad9077.github.io/quizzes-hub/"></noscript>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
@@ -100,7 +103,8 @@
     <script src="assets/vendor/d3.min.js"></script>
     <script src="assets/vendor/topojson-client.min.js"></script>
     <script src="https://ahmad9077.github.io/quizzes-hub/config.js?v=4"></script>
-    <script src="https://ahmad9077.github.io/quizzes-hub/progress-client.js?v=4"></script>
-    <script src="script.js?v=7"></script>
+    <script src="https://ahmad9077.github.io/quizzes-hub/access-guard.js?v=1" data-quiz-id="country-map"></script>
+    <script src="https://ahmad9077.github.io/quizzes-hub/progress-client.js?v=5"></script>
+    <script src="script.js?v=8"></script>
   </body>
 </html>

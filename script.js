@@ -91,7 +91,8 @@ let locked = false;
 let answers = [];
 let zoomedOut = false;
 
-init();
+const accessReady = window.QuizzesHubAccessReady || Promise.reject(new Error("Missing Quizzes Hub access guard."));
+accessReady.then(init).catch(showAccessMessage);
 
 async function init() {
   try {
@@ -108,6 +109,11 @@ async function init() {
     elements.quizPanel.replaceChildren(message);
     console.error(error);
   }
+}
+
+function showAccessMessage() {
+  document.documentElement.dataset.quizAccess = "denied";
+  elements.quizPanel.innerHTML = "<p>Please open this quiz from Quizzes Hub.</p>";
 }
 
 function buildCountryDataset() {
