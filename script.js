@@ -422,7 +422,15 @@ function showResults() {
     score,
     total: QUESTION_COUNT,
     level: getScoreGrade(percent),
-    details: { percent, answers: answers.map(answer => ({ correct: answer.correct, country: answer.country.name })) }
+    details: {
+      percent,
+      answers: answers.map(answer => ({
+        prompt: answer.country.name,
+        expected: answer.country.name,
+        selected: answer.selected.name,
+        correct: answer.correct
+      }))
+    }
   });
 }
 
