@@ -10,6 +10,7 @@ const elements = {
   progressBar: document.querySelector("#progress-bar"),
   mapStage: document.querySelector("#map-stage"),
   neighborCount: document.querySelector("#neighbor-count"),
+  zoomToggle: document.querySelector("#zoom-toggle"),
   options: document.querySelector("#options"),
   feedback: document.querySelector("#feedback"),
   nextButton: document.querySelector("#next-button"),
@@ -88,12 +89,13 @@ let currentIndex = 0;
 let score = 0;
 let locked = false;
 let answers = [];
+let zoomedOut = false;
 
 init();
 
 async function init() {
   try {
-    const response = await fetch("assets/maps/countries-50m.json?v=5");
+    const response = await fetch("assets/maps/countries-50m.json?v=6");
     topology = await response.json();
     geometries = topology.objects.countries.geometries;
     adjacency = topojson.neighbors(geometries);
@@ -194,6 +196,7 @@ function distractorScore(correct, candidate) {
 function renderQuestion() {
   const item = quiz[currentIndex];
   locked = false;
+  zoomedOut = false;
 
   elements.questionLabel.textContent = `Question ${currentIndex + 1} of ${QUESTION_COUNT}`;
   elements.scoreValue.textContent = score;
@@ -205,6 +208,7 @@ function renderQuestion() {
   elements.nextButton.textContent = "Choose an answer";
   elements.options.replaceChildren();
 
+  updateZoomToggle();
   renderMap(item.country);
 
   item.options.forEach((option, index) => {
@@ -226,7 +230,7 @@ function renderQuestion() {
 function renderMap(country) {
   elements.mapStage.replaceChildren();
 
-  const viewBounds = getExpandedBounds(country);
+  const viewBounds = getExpandedBounds(country, zoomedOut ? 1.9 : 1);
   const contextCountries = countries.filter(item => (
     item.id !== country.id && boundsIntersect(item.bounds, viewBounds)
   ));
@@ -268,14 +272,14 @@ function getBorderLabel(count) {
   return `${count} land borders`;
 }
 
-function getExpandedBounds(country) {
+function getExpandedBounds(country, zoomMultiplier = 1) {
   const [[west, south], [east, north]] = country.bounds;
   const centerLon = (west + east) / 2;
   const centerLat = (south + north) / 2;
   const lonSpan = Math.max(0.7, east - west);
   const latSpan = Math.max(0.7, north - south);
   const largestSpan = Math.max(lonSpan, latSpan);
-  const zoomOut = getZoomOutFactor(largestSpan);
+  const zoomOut = getZoomOutFactor(largestSpan) * zoomMultiplier;
   const minHalfSpan = largestSpan < 4 ? 3.2 : 1.8;
   const lonHalf = Math.max((lonSpan * zoomOut) / 2, minHalfSpan);
   const latHalf = Math.max((latSpan * zoomOut) / 2, minHalfSpan);
@@ -284,6 +288,18 @@ function getExpandedBounds(country) {
     [clamp(centerLon - lonHalf, -179.8, 179.8), clamp(centerLat - latHalf, -84, 84)],
     [clamp(centerLon + lonHalf, -179.8, 179.8), clamp(centerLat + latHalf, -84, 84)]
   ];
+}
+
+function toggleMapZoom() {
+  if (!quiz[currentIndex]) return;
+  zoomedOut = !zoomedOut;
+  updateZoomToggle();
+  renderMap(quiz[currentIndex].country);
+}
+
+function updateZoomToggle() {
+  elements.zoomToggle.textContent = zoomedOut ? "Zoom in" : "Zoom out";
+  elements.zoomToggle.setAttribute("aria-pressed", String(zoomedOut));
 }
 
 function getZoomOutFactor(span) {
@@ -464,6 +480,7 @@ function sharedWords(a, b) {
 elements.nextButton.addEventListener("click", nextQuestion);
 elements.restartButton.addEventListener("click", startQuiz);
 elements.playAgainButton.addEventListener("click", startQuiz);
+elements.zoomToggle.addEventListener("click", toggleMapZoom);
 
 document.addEventListener("keydown", event => {
   if (!elements.resultsPanel.hidden) return;

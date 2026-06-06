@@ -51,9 +51,9 @@ p {
 
 .app-shell {
   width: min(1180px, calc(100% - 32px));
-  min-height: 100dvh;
+  height: 100dvh;
   margin: 0 auto;
-  padding: 24px 0;
+  padding: clamp(10px, 2dvh, 18px) 0;
 }
 
 .quiz-panel,
@@ -67,8 +67,9 @@ p {
 .quiz-panel {
   display: grid;
   grid-template-rows: auto auto minmax(0, 1fr) auto;
-  gap: 16px;
-  min-height: calc(100dvh - 48px);
+  gap: clamp(8px, 1.6dvh, 14px);
+  height: 100%;
+  min-height: 0;
   padding: clamp(14px, 2vw, 22px);
 }
 
@@ -87,11 +88,23 @@ p {
   gap: 16px;
 }
 
+.quiz-header {
+  align-items: center;
+}
+
+.header-actions,
+.map-tools {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .actions-row {
   position: sticky;
   bottom: 0;
   z-index: 2;
   align-items: center;
+  justify-content: flex-end;
   border-top: 1px solid rgba(31, 37, 35, 0.08);
   background: rgba(255, 253, 248, 0.94);
   padding-top: 10px;
@@ -178,7 +191,8 @@ h1,
   gap: 12px;
 }
 
-.map-chip {
+.map-chip,
+.map-tool-button {
   flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: var(--radius);
@@ -188,6 +202,18 @@ h1,
   font-size: 0.76rem;
   font-weight: 800;
   text-align: center;
+}
+
+.map-tool-button {
+  background: var(--surface);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.map-tool-button[aria-pressed="true"] {
+  border-color: rgba(23, 107, 106, 0.38);
+  background: #e9f3f1;
+  color: var(--teal-dark);
 }
 
 .map-stage {
@@ -510,10 +536,13 @@ h1,
 @media (max-width: 900px) {
   .app-shell {
     width: min(100% - 18px, 720px);
+    height: auto;
+    min-height: 100dvh;
     padding: 9px 0;
   }
 
   .quiz-panel {
+    height: auto;
     min-height: calc(100dvh - 18px);
     gap: 12px;
     padding: 12px;
@@ -551,12 +580,24 @@ h1,
     align-items: stretch;
   }
 
+  .quiz-header,
+  .map-topline {
+    flex-direction: column;
+  }
+
+  .header-actions,
+  .map-tools {
+    width: 100%;
+    justify-content: space-between;
+  }
+
   h1 {
     font-size: 1.9rem;
   }
 
   .score-box,
-  .map-chip {
+  .map-chip,
+  .map-tool-button {
     align-self: flex-start;
   }
 
@@ -567,10 +608,6 @@ h1,
 
   .option-button {
     min-height: 74px;
-  }
-
-  .secondary-button {
-    flex: 0 0 34%;
   }
 
   .primary-button {
@@ -585,6 +622,7 @@ h1,
 
   .quiz-panel {
     min-height: calc(100dvh - 20px);
+    height: 100%;
     gap: 10px;
   }
 

@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800;900&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
-    <link rel="stylesheet" href="styles.css?v=5">
+    <link rel="stylesheet" href="styles.css?v=6">
   </head>
   <body>
     <main class="app-shell">
@@ -19,9 +19,12 @@
             <p id="question-label" class="label">Question 1 of 15</p>
             <h1>Country Map Quiz</h1>
           </div>
-          <div class="score-box" aria-label="Current score">
-            <span id="score-value">0</span>
-            <small>/ 15</small>
+          <div class="header-actions">
+            <button id="restart-button" class="secondary-button" type="button">Restart</button>
+            <div class="score-box" aria-label="Current score">
+              <span id="score-value">0</span>
+              <small>/ 15</small>
+            </div>
           </div>
         </header>
 
@@ -36,7 +39,10 @@
                 <p class="label">Border outline</p>
                 <h2 id="map-heading">Which country is this?</h2>
               </div>
-              <span id="neighbor-count" class="map-chip">Borders loading</span>
+              <div class="map-tools">
+                <span id="neighbor-count" class="map-chip">Borders loading</span>
+                <button id="zoom-toggle" class="map-tool-button" type="button" aria-pressed="false">Zoom out</button>
+              </div>
             </div>
             <div id="map-stage" class="map-stage" role="img" aria-label="Country border map"></div>
           </section>
@@ -48,7 +54,6 @@
         </div>
 
         <footer class="actions-row">
-          <button id="restart-button" class="secondary-button" type="button">Restart</button>
           <button id="next-button" class="primary-button" type="button" disabled>Choose an answer</button>
         </footer>
       </section>
@@ -94,6 +99,6 @@
 
     <script src="assets/vendor/d3.min.js"></script>
     <script src="assets/vendor/topojson-client.min.js"></script>
-    <script src="script.js?v=5"></script>
+    <script src="script.js?v=6"></script>
   </body>
 </html>
