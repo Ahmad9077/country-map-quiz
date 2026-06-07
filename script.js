@@ -6,6 +6,10 @@ const difficultySettings = {
   hard: { label: "Hard", questionCount: 20, optionCount: 4 }
 };
 
+const QUIZ_ID = "country-map";
+const SESSION_STORAGE_KEY = `${QUIZ_ID}:active-session:v1`;
+const ADAPTIVE_READY_TIMEOUT_MS = 3000;
+
 const elements = {
   quizPanel: document.querySelector("#quiz-panel"),
   resultsPanel: document.querySelector("#results-panel"),
@@ -19,7 +23,6 @@ const elements = {
   options: document.querySelector("#options"),
   feedback: document.querySelector("#feedback"),
   nextButton: document.querySelector("#next-button"),
-  restartButton: document.querySelector("#restart-button"),
   playAgainButton: document.querySelector("#play-again-button"),
   resultTitle: document.querySelector("#result-title"),
   resultMessage: document.querySelector("#result-message"),
@@ -114,6 +117,7 @@ async function init() {
     adjacency = topojson.neighbors(geometries);
     countries = buildCountryDataset();
     quizCountries = countries.filter(isQuizEligibleCountry);
+    await waitForAdaptiveReady();
     startQuiz();
   } catch (error) {
     const message = document.createElement("p");
@@ -171,7 +175,10 @@ function isQuizEligibleCountry(country) {
 }
 
 function startQuiz() {
-  quiz = shuffle([...quizCountries]).slice(0, quizSettings.questionCount).map(country => ({
+  if (restoreSession()) return;
+
+  quiz = selectQuestionCountries().map(country => ({
+    key: country.name,
     country,
     options: buildOptions(country)
   }));
@@ -181,7 +188,22 @@ function startQuiz() {
   answers = [];
   elements.resultsPanel.hidden = true;
   elements.quizPanel.hidden = false;
+  saveSession();
   renderQuestion();
+}
+
+function startNewQuiz() {
+  clearSession();
+  startQuiz();
+}
+
+function selectQuestionCountries() {
+  const allQuestions = quizCountries.map(country => ({ key: country.name, country }));
+  const adaptiveQuestions = window.QuizzesHubAdaptive?.selectQuestions?.(allQuestions, quizSettings.questionCount);
+  if (Array.isArray(adaptiveQuestions) && adaptiveQuestions.length > 0) {
+    return adaptiveQuestions.map(question => question.country).filter(Boolean);
+  }
+  return shuffle([...quizCountries]).slice(0, quizSettings.questionCount);
 }
 
 function buildOptions(correct) {
@@ -213,18 +235,21 @@ function distractorScore(correct, candidate) {
 
 function renderQuestion() {
   const item = quiz[currentIndex];
-  locked = false;
+  const savedAnswer = answers[currentIndex];
+  locked = Boolean(savedAnswer);
   zoomedOut = false;
 
-  elements.questionLabel.textContent = `${quizSettings.label} · Question ${currentIndex + 1} of ${quizSettings.questionCount}`;
+  elements.questionLabel.textContent = `Question ${currentIndex + 1} of ${quizSettings.questionCount}`;
   elements.scoreValue.textContent = score;
   elements.scoreTotalValue.textContent = `/ ${quizSettings.questionCount}`;
-  elements.progressBar.style.width = `${((currentIndex + 1) / quizSettings.questionCount) * 100}%`;
+  elements.progressBar.style.width = `${((currentIndex + (savedAnswer ? 1 : 0)) / quizSettings.questionCount) * 100}%`;
   elements.neighborCount.textContent = getBorderLabel(item.country.neighbors.length);
   elements.feedback.hidden = true;
   elements.feedback.replaceChildren();
-  elements.nextButton.disabled = true;
-  elements.nextButton.textContent = "Choose an answer";
+  elements.nextButton.disabled = !savedAnswer;
+  elements.nextButton.textContent = savedAnswer
+    ? currentIndex === quizSettings.questionCount - 1 ? "Show Results" : "Next Question"
+    : "Choose an answer";
   elements.options.replaceChildren();
 
   updateZoomToggle();
@@ -242,8 +267,25 @@ function renderQuestion() {
     button.append(label);
     button.setAttribute("aria-label", `Option ${index + 1}: ${option.name}`);
     button.addEventListener("click", () => chooseAnswer(option.id));
+
+    if (savedAnswer) {
+      const buttonId = String(option.id);
+      const isCorrectButton = buttonId === String(item.country.id);
+      const isChosenWrong = buttonId === String(savedAnswer.selected.id) && !savedAnswer.correct;
+      button.disabled = true;
+      if (isCorrectButton) button.classList.add("correct");
+      if (isChosenWrong) button.classList.add("wrong");
+      if (buttonId === String(savedAnswer.selected.id)) button.setAttribute("aria-pressed", "true");
+    }
+
     elements.options.append(button);
   });
+
+  if (savedAnswer) {
+    elements.feedback.hidden = false;
+    renderFeedback(savedAnswer.correct, item.country);
+    removeAnswerMedia();
+  }
 }
 
 function renderMap(country) {
@@ -385,6 +427,7 @@ function chooseAnswer(selectedId) {
   if (isCorrect) score += 1;
 
   answers.push({
+    questionKey: item.key,
     country: item.country,
     selected: selectedCountry,
     correct: isCorrect
@@ -407,6 +450,7 @@ function chooseAnswer(selectedId) {
   elements.nextButton.disabled = false;
   elements.nextButton.textContent = currentIndex === quizSettings.questionCount - 1 ? "Show Results" : "Next Question";
   elements.progressBar.style.width = `${((currentIndex + 1) / quizSettings.questionCount) * 100}%`;
+  saveSession();
 }
 
 function nextQuestion() {
@@ -416,11 +460,13 @@ function nextQuestion() {
     return;
   }
   currentIndex += 1;
+  saveSession();
   renderQuestion();
 }
 
 function showResults() {
   const percent = Math.round((score / quizSettings.questionCount) * 100);
+  clearSession();
   locked = false;
   elements.quizPanel.hidden = true;
   elements.resultsPanel.hidden = false;
@@ -437,8 +483,35 @@ function showResults() {
     elements.reviewList.append(createReviewItem(answer, index));
   });
 
-  window.QuizzesHubProgress?.record({
-    quizId: "country-map",
+  void recordCompletedQuiz(percent);
+}
+
+function normalizeDifficulty(value) {
+  return Object.prototype.hasOwnProperty.call(difficultySettings, value) ? value : "medium";
+}
+
+async function recordCompletedQuiz(percent) {
+  await waitForAdaptiveReady();
+
+  let adaptiveRecorded = false;
+  if (window.QuizzesHubAdaptive?.recordAttempt) {
+    try {
+      const result = await window.QuizzesHubAdaptive.recordAttempt(
+        answers.map(answer => ({
+          question: { key: answer.questionKey || answer.country.name },
+          correct: answer.correct
+        }))
+      );
+      adaptiveRecorded = Boolean(result?.ok);
+    } catch (error) {
+      console.warn("Adaptive recording failed", error);
+    }
+  }
+
+  if (adaptiveRecorded) return;
+
+  await window.QuizzesHubProgress?.record({
+    quizId: QUIZ_ID,
     score,
     total: quizSettings.questionCount,
     level: getScoreGrade(percent),
@@ -446,6 +519,7 @@ function showResults() {
       difficulty: assignmentDifficulty,
       percent,
       answers: answers.map(answer => ({
+        key: answer.questionKey || answer.country.name,
         prompt: answer.country.name,
         expected: answer.country.name,
         selected: answer.selected.name,
@@ -455,8 +529,105 @@ function showResults() {
   });
 }
 
-function normalizeDifficulty(value) {
-  return Object.prototype.hasOwnProperty.call(difficultySettings, value) ? value : "medium";
+function waitForAdaptiveReady() {
+  if (!window.QuizzesHubAdaptiveReady) return Promise.resolve(null);
+  return Promise.race([
+    window.QuizzesHubAdaptiveReady.catch(() => null),
+    new Promise(resolve => setTimeout(() => resolve(null), ADAPTIVE_READY_TIMEOUT_MS))
+  ]);
+}
+
+function restoreSession() {
+  const session = loadSession();
+  if (!session || session.assignmentDifficulty !== assignmentDifficulty) return false;
+  if (!Array.isArray(session.quiz) || session.quiz.length === 0) return false;
+
+  quiz = restoreQuiz(session.quiz);
+  if (quiz.length === 0) {
+    clearSession();
+    return false;
+  }
+  currentIndex = clampNumber(session.currentIndex, 0, quiz.length - 1);
+  score = clampNumber(session.score, 0, quiz.length);
+  answers = restoreAnswers(session.answers);
+  locked = Boolean(answers[currentIndex]);
+
+  elements.resultsPanel.hidden = true;
+  elements.quizPanel.hidden = false;
+  renderQuestion();
+  return true;
+}
+
+function loadSession() {
+  try {
+    return JSON.parse(localStorage.getItem(SESSION_STORAGE_KEY) || "null");
+  } catch {
+    return null;
+  }
+}
+
+function saveSession() {
+  try {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify({
+      version: 1,
+      assignmentDifficulty,
+      quiz: quiz.map(item => ({
+        key: item.key,
+        optionKeys: item.options.map(option => option.name)
+      })),
+      currentIndex,
+      score,
+      answers: answers.map(answer => ({
+        questionKey: answer.questionKey || answer.country.name,
+        selectedKey: answer.selected.name,
+        correct: answer.correct
+      }))
+    }));
+  } catch {
+    // Storage can be unavailable in private browsing; the quiz still works.
+  }
+}
+
+function restoreQuiz(savedQuiz) {
+  return savedQuiz.map(saved => {
+    const country = findQuizCountry(saved.key);
+    if (!country || !Array.isArray(saved.optionKeys)) return null;
+    const options = saved.optionKeys.map(findQuizCountry).filter(Boolean);
+    return options.length > 0 ? { key: country.name, country, options } : null;
+  }).filter(Boolean);
+}
+
+function restoreAnswers(savedAnswers) {
+  if (!Array.isArray(savedAnswers)) return [];
+  return savedAnswers.map(saved => {
+    const country = findQuizCountry(saved.questionKey);
+    const selected = findQuizCountry(saved.selectedKey);
+    if (!country || !selected) return null;
+    return {
+      questionKey: country.name,
+      country,
+      selected,
+      correct: Boolean(saved.correct)
+    };
+  }).filter(Boolean);
+}
+
+function findQuizCountry(name) {
+  return quizCountries.find(country => country.name === name);
+}
+
+function clearSession() {
+  try {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
+  } catch {
+    // Ignore storage failures.
+  }
+}
+
+function clampNumber(value, min, max) {
+  const number = Number(value);
+  if (!Number.isFinite(number)) return min;
+  return Math.min(max, Math.max(min, number));
 }
 
 function renderFeedback(isCorrect, country) {
@@ -529,8 +700,7 @@ function sharedWords(a, b) {
 }
 
 elements.nextButton.addEventListener("click", nextQuestion);
-elements.restartButton.addEventListener("click", startQuiz);
-elements.playAgainButton.addEventListener("click", startQuiz);
+elements.playAgainButton.addEventListener("click", startNewQuiz);
 elements.zoomToggle.addEventListener("click", toggleMapZoom);
 
 document.addEventListener("keydown", event => {
