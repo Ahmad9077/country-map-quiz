@@ -103,8 +103,13 @@
     <script src="assets/vendor/topojson-client.min.js"></script>
     <script src="https://ahmad9077.github.io/quizzes-hub/config.js?v=4"></script>
     <script src="https://ahmad9077.github.io/quizzes-hub/access-guard.js?v=2" data-quiz-id="country-map"></script>
-    <script src="https://ahmad9077.github.io/quizzes-hub/progress-client.js?v=6"></script>
-    <script src="https://ahmad9077.github.io/quizzes-hub/adaptive-client.js?v=2"></script>
-    <script src="script.js?v=10"></script>
+    <script src="https://ahmad9077.github.io/quizzes-hub/challenge-client.js?v=1"></script>
+    <script>
+      if (!new URLSearchParams(window.location.search).has("challenge_session")) {
+        document.write('<script src="https://ahmad9077.github.io/quizzes-hub/progress-client.js?v=6"><\/script>');
+        document.write('<script src="https://ahmad9077.github.io/quizzes-hub/adaptive-client.js?v=2"><\/script>');
+      }
+    </script>
+    <script src="script.js?v=11"></script>
   </body>
 </html>
