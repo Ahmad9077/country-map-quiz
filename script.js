@@ -105,6 +105,8 @@ let assignmentDifficulty = "medium";
 let challengeState = null;
 let challengeQuestion = null;
 let challengeAnswer = null;
+let challengeLastTurnId = null;
+let challengeRevealTimer = null;
 
 const accessReady = window.QuizzesHubAccessReady || Promise.reject(new Error("Missing Quizzes Hub access guard."));
 accessReady.then((access) => {
@@ -138,16 +140,29 @@ async function init() {
 async function initChallengeMode() {
   try {
     challengeState = await window.QuizzesHubChallengeReady;
-    window.QuizzesHubChallenge.onChange((state) => {
-      challengeState = state;
-      challengeAnswer = null;
-      renderChallengeQuestion();
-    });
+    challengeLastTurnId = getChallengeTurnId(challengeState?.last_turn);
+    window.QuizzesHubChallenge.onChange(handleChallengeStateChange);
     renderChallengeQuestion();
   } catch (error) {
     console.error(error);
     elements.quizPanel.innerHTML = "<p>Could not open this challenge. Please return to Quizzes Hub.</p>";
   }
+}
+
+function handleChallengeStateChange(state) {
+  const turnId = getChallengeTurnId(state?.last_turn);
+  if (turnId && turnId !== challengeLastTurnId) {
+    challengeLastTurnId = turnId;
+    challengeState = state;
+    renderChallengeAnswerReveal(state);
+    return;
+  }
+
+  if (challengeRevealTimer) return;
+
+  challengeState = state;
+  challengeAnswer = null;
+  renderChallengeQuestion();
 }
 
 function showAccessMessage() {
@@ -237,8 +252,8 @@ function renderChallengeQuestion() {
 
   if (challengeState.status !== "active") {
     elements.questionLabel.textContent = "Challenge Mode";
-    elements.scoreValue.textContent = getMyWrongCount();
-    elements.scoreTotalValue.textContent = "/ 3 wrong";
+    elements.scoreValue.textContent = getChallengeScoreText();
+    elements.scoreTotalValue.textContent = "";
     elements.progressBar.style.width = "0%";
     elements.neighborCount.textContent = "";
     elements.mapStage.replaceChildren();
@@ -314,8 +329,8 @@ function renderQuestion() {
   elements.questionLabel.textContent = isChallengeMode
     ? `Challenge question ${challengeState.current_turn_index + 1}`
     : `Question ${currentIndex + 1} of ${quizSettings.questionCount}`;
-  elements.scoreValue.textContent = isChallengeMode ? getMyWrongCount() : score;
-  elements.scoreTotalValue.textContent = isChallengeMode ? "/ 3 wrong" : `/ ${quizSettings.questionCount}`;
+  elements.scoreValue.textContent = isChallengeMode ? getChallengeScoreText() : score;
+  elements.scoreTotalValue.textContent = isChallengeMode ? "" : `/ ${quizSettings.questionCount}`;
   elements.progressBar.style.width = isChallengeMode
     ? `${Math.min(getMyWrongCount(), 3) / 3 * 100}%`
     : `${((currentIndex + (savedAnswer ? 1 : 0)) / quizSettings.questionCount) * 100}%`;
@@ -363,6 +378,7 @@ function renderQuestion() {
   if (savedAnswer) {
     elements.feedback.hidden = false;
     renderFeedback(savedAnswer.correct, activeItem.country);
+    if (isChallengeMode) appendChallengeSelectedAnswer(savedAnswer);
     removeAnswerMedia();
   } else if (isChallengeMode) {
     renderChallengeStatus();
@@ -669,22 +685,22 @@ function renderChallengeStatus() {
 function renderChallengeFinished() {
   const winner = (challengeState.players || []).find(player => player.user_id === challengeState.winner_id);
   elements.questionLabel.textContent = "Challenge complete";
-  elements.scoreValue.textContent = getMyWrongCount();
-  elements.scoreTotalValue.textContent = "/ 3 wrong";
+  elements.scoreValue.textContent = getChallengeScoreText();
+  elements.scoreTotalValue.textContent = "";
   elements.progressBar.style.width = "100%";
   elements.neighborCount.textContent = "";
   elements.mapStage.replaceChildren();
   elements.options.replaceChildren();
   elements.feedback.hidden = false;
-  elements.feedback.textContent = winner ? `${winner.display_name} wins.` : "Challenge finished.";
+  elements.feedback.textContent = winner ? `🎉 ${winner.display_name} wins!` : "🎉 Challenge finished!";
   elements.nextButton.disabled = false;
   elements.nextButton.textContent = "Back to Hub";
 }
 
 function renderChallengeMissingQuestion() {
   elements.questionLabel.textContent = "Challenge Mode";
-  elements.scoreValue.textContent = getMyWrongCount();
-  elements.scoreTotalValue.textContent = "/ 3 wrong";
+  elements.scoreValue.textContent = getChallengeScoreText();
+  elements.scoreTotalValue.textContent = "";
   elements.progressBar.style.width = "0%";
   elements.neighborCount.textContent = "";
   elements.mapStage.replaceChildren();
@@ -698,6 +714,72 @@ function renderChallengeMissingQuestion() {
 function getMyWrongCount() {
   const me = (challengeState?.players || []).find(player => player.user_id === window.QuizzesHubChallenge?.currentUserId);
   return me?.wrong_count || 0;
+}
+
+function renderChallengeAnswerReveal(state) {
+  window.clearTimeout(challengeRevealTimer);
+
+  const lastTurn = state?.last_turn;
+  const country = findQuizCountry(lastTurn?.question_key);
+  if (!lastTurn || !country) {
+    challengeRevealTimer = window.setTimeout(() => {
+      challengeRevealTimer = null;
+      challengeAnswer = null;
+      renderChallengeQuestion();
+    }, 2000);
+    return;
+  }
+
+  const selected = findQuizCountry(lastTurn.answer_text) || {
+    id: String(lastTurn.answer_text || ""),
+    name: String(lastTurn.answer_text || "No answer"),
+    neighbors: [],
+    fact: ""
+  };
+  challengeQuestion = {
+    key: country.name,
+    country,
+    options: buildRevealOptions(country, selected)
+  };
+  challengeAnswer = {
+    questionKey: country.name,
+    country,
+    selected,
+    correct: Boolean(lastTurn.is_correct)
+  };
+  renderQuestion();
+
+  challengeRevealTimer = window.setTimeout(() => {
+    challengeRevealTimer = null;
+    challengeAnswer = null;
+    renderChallengeQuestion();
+  }, 2000);
+}
+
+function buildRevealOptions(correct, selected) {
+  const options = new Map([[correct.name, correct]]);
+  if (selected?.name) options.set(selected.name, selected);
+  buildOptions(correct).forEach(option => {
+    if (options.size < quizSettings.optionCount) options.set(option.name, option);
+  });
+  return [...options.values()];
+}
+
+function appendChallengeSelectedAnswer(savedAnswer) {
+  const selectedLine = document.createElement("div");
+  selectedLine.textContent = `Selected answer: ${savedAnswer.selected?.name || "No answer"}`;
+  elements.feedback.append(document.createElement("br"), selectedLine);
+}
+
+function getChallengeScoreText() {
+  const players = challengeState?.players || [];
+  if (!players.length) return `${getMyWrongCount()}/3 wrong`;
+  return players.map(player => `${player.display_name}: ${player.wrong_count}/3`).join(" · ");
+}
+
+function getChallengeTurnId(turn) {
+  if (!turn) return null;
+  return `${turn.turn_index}:${turn.answering_player_id}:${turn.answered_at || ""}`;
 }
 
 function restoreSession() {
