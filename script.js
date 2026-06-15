@@ -232,7 +232,6 @@ function startQuiz() {
 
 function startNewQuiz() {
   if (isChallengeMode) {
-    window.QuizzesHubChallenge?.openHub?.();
     return;
   }
   clearSession();
@@ -260,8 +259,7 @@ function renderChallengeQuestion() {
     elements.options.replaceChildren();
     elements.feedback.hidden = false;
     elements.feedback.textContent = "Waiting for the challenge to start.";
-    elements.nextButton.disabled = false;
-    elements.nextButton.textContent = "Back to Hub";
+    elements.nextButton.hidden = true;
     return;
   }
 
@@ -337,9 +335,10 @@ function renderQuestion() {
   elements.neighborCount.textContent = getBorderLabel(activeItem.country.neighbors.length);
   elements.feedback.hidden = true;
   elements.feedback.replaceChildren();
+  elements.nextButton.hidden = isChallengeMode;
   elements.nextButton.disabled = isChallengeMode ? false : !savedAnswer;
   elements.nextButton.textContent = isChallengeMode
-    ? "Back to Hub"
+    ? ""
     : savedAnswer
     ? currentIndex === quizSettings.questionCount - 1 ? "Show Results" : "Next Question"
     : "Choose an answer";
@@ -575,7 +574,6 @@ async function chooseAnswer(selectedId) {
 
 function nextQuestion() {
   if (isChallengeMode) {
-    window.QuizzesHubChallenge?.openHub?.();
     return;
   }
   if (!locked) return;
@@ -694,8 +692,7 @@ function renderChallengeFinished() {
   elements.options.replaceChildren();
   elements.feedback.hidden = false;
   elements.feedback.textContent = winner ? `🎉 ${winner.display_name} wins!` : "🎉 Challenge finished!";
-  elements.nextButton.disabled = false;
-  elements.nextButton.textContent = "Back to Hub";
+  elements.nextButton.hidden = true;
 }
 
 function renderChallengeMissingQuestion() {
@@ -708,8 +705,7 @@ function renderChallengeMissingQuestion() {
   elements.options.replaceChildren();
   elements.feedback.hidden = false;
   elements.feedback.textContent = "This challenge question is not available in this quiz version.";
-  elements.nextButton.disabled = false;
-  elements.nextButton.textContent = "Back to Hub";
+  elements.nextButton.hidden = true;
 }
 
 function getMyWrongCount() {
